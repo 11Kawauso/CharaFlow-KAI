@@ -1,0 +1,80 @@
+/* 1カラムの操作パネル。入力 → 見本 → 定型文 → 設定 の順に、上から使う頻度順で並べる */
+:root{
+  --bg:#eef1ee; --surface:#ffffff; --fg:#1b2420; --muted:#5b6762; --line:#d6ddd8;
+  --accent:#1d5c48; --accent-fg:#ffffff; --chip:#e3ebe6; --danger:#a33a2a;
+  --f-ui:"BIZ UDPGothic","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121715; --surface:#1b2220; --fg:#e8eeeb; --muted:#9aa8a2; --line:#2e3935;
+  --accent:#5fc1a0; --accent-fg:#0d1a15; --chip:#24302c; --danger:#e88a7a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121715; --surface:#1b2220; --fg:#e8eeeb; --muted:#9aa8a2; --line:#2e3935;
+  --accent:#5fc1a0; --accent-fg:#0d1a15; --chip:#24302c; --danger:#e88a7a; color-scheme:dark}
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:16px;line-height:1.55}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:22px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px}
+h1{font-size:1.35rem;margin:0;letter-spacing:.02em;text-wrap:balance}
+h1 small{display:block;font-size:.8rem;font-weight:400;color:var(--muted);letter-spacing:0}
+h2{font-size:.78rem;margin:0 0 8px;color:var(--muted);letter-spacing:.08em;font-weight:700}
+section{display:flex;flex-direction:column;gap:10px}
+
+textarea{width:100%;box-sizing:border-box;min-height:7.5em;resize:vertical;font:inherit;font-size:1.15rem;
+  padding:12px 14px;border:2px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg)}
+textarea:focus-visible{outline:none;border-color:var(--accent)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{font:inherit;cursor:pointer;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--fg);padding:10px 14px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700;font-size:1.15rem;flex:1;padding:14px}
+.mic{display:flex;align-items:center;gap:6px;font-weight:700;padding:14px 16px}
+.mic svg{width:20px;height:20px}
+.mic.on{background:var(--danger);border-color:var(--danger);color:#fff}
+.hint{font-size:.85rem;color:var(--muted);margin:0}
+.hint.warn{color:var(--danger)}
+
+.sample{border-radius:14px;min-height:96px;display:flex;align-items:center;justify-content:center;padding:14px;
+  text-align:center;font-size:2rem;line-height:1.25;overflow-wrap:anywhere;border:2px solid var(--line)}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--chip);border-color:transparent;padding:10px 14px;font-size:1rem;position:relative}
+.chip .x{display:none;margin-left:8px;color:var(--danger);font-weight:700}
+.editing .chip .x{display:inline}
+.linkbtn{border:none;background:none;color:var(--accent);padding:4px 2px;font-size:.9rem;text-decoration:underline}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>label,.field>.lbl{font-size:.9rem;font-weight:700}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{padding:8px 12px;font-size:.95rem}
+.seg button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-fg)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.colors{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.sw{height:52px;border-radius:10px;font-weight:700;font-size:1.1rem;padding:0;border:3px solid transparent}
+.sw[aria-pressed="true"]{border-color:var(--accent)}
+.pickers{display:flex;gap:16px;flex-wrap:wrap}
+.pickers label{display:flex;align-items:center;gap:8px;font-size:.9rem}
+input[type=color]{width:44px;height:36px;border:1px solid var(--line);border-radius:8px;background:none;padding:2px}
+.check{display:flex;align-items:center;gap:8px;font-size:.95rem}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+
+/* 表示画面 */
+#stage{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column}
+#stage[hidden]{display:none!important}
+/* 縦持ちのまま開いたときは、画面ごと90度回して横向きレイアウトにする */
+#stage.rot{inset:auto;top:0;left:0;width:100vh;height:100vw;width:100dvh;height:100dvw;
+  transform-origin:top left;transform:translateX(100vw) rotate(90deg)}
+.board{flex:1;position:relative;overflow:hidden;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px))}
+.board.flip{transform:rotate(180deg)}
+.fitbox{position:absolute;inset:calc(env(safe-area-inset-top,0px) + 12px) max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));
+  display:flex;align-items:center;justify-content:center}
+#txt{margin:0;text-align:center;line-height:1.28;overflow-wrap:anywhere;white-space:pre-wrap}
+.scroll #txt{position:absolute;left:0;top:50%;white-space:nowrap;text-align:left;will-change:transform}
+.bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;
+  padding:8px max(12px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 10px) max(12px,env(safe-area-inset-left,0px));
+  background:rgba(127,127,127,.18)}
+.bar button{background:rgba(255,255,255,.14);color:inherit;border-color:rgba(127,127,127,.5);font-size:1rem;padding:10px 16px}
+.bar button.on{background:#c0392b;border-color:#c0392b;color:#fff}
+.bar .close{font-weight:700}
+@media (prefers-reduced-motion: reduce){ .scroll #txt{animation:none} }
