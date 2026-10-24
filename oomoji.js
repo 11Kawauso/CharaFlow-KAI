@@ -9,7 +9,7 @@
     {bg:'#ffffff', fg:'#111111'}, {bg:'#0b2a4a', fg:'#ffffff'}
   ];
   const DEFAULTS = {
-    mode:'fit', size:70, speed:3, font:'gothic', bold:true, fg:'#ffe600', bg:'#000000', flip:false, land:true,
+    mode:'fit', size:70, picSize:80, speed:3, font:'gothic', bold:true, fg:'#ffe600', bg:'#000000', flip:false, land:true,
     phrases:['ごはんできたよー！','お風呂わいたよ','電話だよ','ちょっと出かけてくるね','何か飲む？','もう一回言うね'],
     history:[], pics:[], picSeq:0
   };
@@ -138,7 +138,7 @@
       addPic(id, rec); S.pics.push(id);
       await tx('readwrite', st => st.put(rec, id));
     }
-    e.target.value = ''; save(); renderPics();
+    e.target.value = ''; save(); renderPics(); syncUI();
   };
 
   /* ---------- 設定 UI ---------- */
@@ -162,7 +162,8 @@
   });
 
   $('size').oninput = e => { S.size = +e.target.value; save(); syncUI(); };
-  $('speed').oninput = e => { S.speed = +e.target.value; save(); syncUI(); };
+  $('picSize').oninput = e => { S.picSize = +e.target.value; save(); syncUI(); };
+  $('speed').oninput =e => { S.speed = +e.target.value; save(); syncUI(); };
   $('bold').onchange = e => { S.bold = e.target.checked; save(); syncUI(); };
   $('flip').onchange = e => { S.flip = e.target.checked; save(); syncUI(); };
   $('land').onchange = e => { S.land = e.target.checked; save(); syncUI(); };
@@ -181,6 +182,11 @@
       const p = PRESETS[b.dataset.i]; b.setAttribute('aria-pressed', p.bg === S.bg && p.fg === S.fg);
     });
     $('size').value = S.size; $('sizeVal').textContent = S.size + '%';
+    $('picSize').value = S.picSize; $('picSizeVal').textContent = S.picSize + '%';
+    $('picSizeField').hidden = !S.pics.length;
+    // 見本でも、文字と画像の大きさの比を本番と同じにする
+    sample.style.setProperty('--pic', S.picSize / S.size + 'em');
+    sample.style.setProperty('--pic-solo', S.picSize * 2.5 + 'px');
     $('speed').value = S.speed; $('speedVal').textContent = ['','ゆっくり','やや遅い','ふつう','やや速い','速い'][S.speed];
     $('speedField').hidden = S.mode !== 'scroll';
     $('bold').checked = S.bold; $('flip').checked = S.flip; $('land').checked = S.land;
@@ -246,6 +252,7 @@
     if (S.mode === 'scroll') {
       const fs = Math.max(24, H * S.size / 100 * 0.8);
       txt.style.fontSize = fs + 'px';
+      txt.style.setProperty('--pic', H * S.picSize / 100 * 0.8 + 'px');
       txt.style.marginTop = (-txt.offsetHeight / 2) + 'px';
       const w = txt.scrollWidth;
       const pxPerSec = W * (0.12 + S.speed * 0.07);
@@ -256,14 +263,19 @@
       );
     } else {
       txt.style.marginTop = '';
-      // 画像だけのときは文字の大きさに関係なく、画面いっぱいまで広げる
-      let lo = 12, hi = Math.max(16, txt.classList.contains('solo') ? H : H * S.size / 100), best = lo;
+      // 文字と画像は別々の大きさ設定。両方を同じ割合 k で縮め、画面に収まる一番大きい k を探す
+      const fMax = Math.max(16, H * S.size / 100), pMax = H * S.picSize / 100;
+      const scale = k => {
+        txt.style.fontSize = Math.max(12, Math.floor(fMax * k)) + 'px';
+        txt.style.setProperty('--pic', Math.floor(pMax * k) + 'px');
+      };
+      let lo = 0, hi = 1, best = Math.min(1, 12 / fMax);
       for (let i = 0; i < 18; i++) {
         const mid = (lo + hi) / 2;
-        txt.style.fontSize = mid + 'px';
+        scale(mid);
         if (txt.scrollHeight <= H && txt.scrollWidth <= W) { best = mid; lo = mid; } else { hi = mid; }
       }
-      txt.style.fontSize = Math.floor(best) + 'px';
+      scale(best);
     }
   }
 
