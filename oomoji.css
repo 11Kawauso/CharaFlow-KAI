@@ -36,11 +36,24 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 
 .sample{border-radius:14px;min-height:96px;display:flex;align-items:center;justify-content:center;padding:14px;
   text-align:center;font-size:2rem;line-height:1.25;overflow-wrap:anywhere;border:2px solid var(--line)}
+/* 文の中の画像は文字と同じくらいの高さ。画像だけのときは大きく見せる */
+.sample img{height:1.15em;width:auto;vertical-align:-.2em;margin:0 .06em;border-radius:4px}
+.sample.solo img{display:block;width:auto;height:auto;max-width:100%;max-height:200px;margin:0}
 
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{background:var(--chip);border-color:transparent;padding:10px 14px;font-size:1rem;position:relative}
 .chip .x{display:none;margin-left:8px;color:var(--danger);font-weight:700}
 .editing .chip .x{display:inline}
+.chip img{height:1.4em;width:auto;vertical-align:-.35em;border-radius:4px}
+.chip .solo img{height:2.2em}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.tile{background:var(--chip);border-color:transparent;padding:6px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.85rem;position:relative}
+.tile img{width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}
+.tile.add{border:2px dashed var(--line);background:none;justify-content:center;min-height:110px;font-weight:700}
+.tile.add b{font-size:2rem;line-height:1}
+.tile .x{display:none;position:absolute;top:2px;right:2px;width:28px;height:28px;border-radius:50%;
+  background:var(--danger);color:#fff;font-weight:700;align-items:center;justify-content:center}
+.editing .tile .x{display:flex}
 .linkbtn{border:none;background:none;color:var(--accent);padding:4px 2px;font-size:.9rem;text-decoration:underline}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:16px}
@@ -71,6 +84,9 @@ input[type=color]{width:44px;height:36px;border:1px solid var(--line);border-rad
 .fitbox{position:absolute;inset:calc(env(safe-area-inset-top,0px) + 12px) max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));
   display:flex;align-items:center;justify-content:center}
 #txt{margin:0;text-align:center;line-height:1.28;overflow-wrap:anywhere;white-space:pre-wrap}
+#txt img{height:1.15em;width:auto;vertical-align:-.2em;margin:0 .06em;border-radius:.06em}
+#txt.solo{line-height:1}
+#txt.solo img{display:block;height:1em;margin:0;border-radius:0}
 .scroll #txt{position:absolute;left:0;top:50%;white-space:nowrap;text-align:left;will-change:transform}
 .bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;
   padding:8px max(12px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 10px) max(12px,env(safe-area-inset-left,0px));

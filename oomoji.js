@@ -11,7 +11,7 @@
   const DEFAULTS = {
     mode:'fit', size:70, speed:3, font:'gothic', bold:true, fg:'#ffe600', bg:'#000000', flip:false, land:true,
     phrases:['ごはんできたよー！','お風呂わいたよ','電話だよ','ちょっと出かけてくるね','何か飲む？','もう一回言うね'],
-    history:[]
+    history:[], pics:[], picSeq:0
   };
   const KEY = 'oomoji-v1';
   let S = {...DEFAULTS};
@@ -21,6 +21,125 @@
   const $ = id => document.getElementById(id);
   const input = $('input'), sample = $('sample'), stage = $('stage'), board = $('board'),
         fitbox = $('fitbox'), txt = $('txt');
+
+  /* ---------- 画像 ---------- */
+  // 画像本体は IndexedDB（localStorage には入りきらない）、並び順と番号だけ S に持つ
+  const PICS = new Map();   // id → {id, url, w, h}
+  const TOKEN = /[\[［]画像(\d+)[\]］]/g;
+  const MAX_SIDE = 1600;
+  const idb = new Promise(res => {
+    try {
+      const r = indexedDB.open('oomoji-pics', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('pics');
+      r.onsuccess = () => res(r.result); r.onerror = () => res(null);
+    } catch(e) { res(null); }
+  });
+  async function tx(mode, fn) {
+    const db = await idb; if (!db) return;
+    return new Promise(res => {
+      try {
+        const t = db.transaction('pics', mode), q = fn(t.objectStore('pics'));
+        t.oncomplete = () => res(q.result); t.onerror = t.onabort = () => res();
+      } catch(e) { res(); }
+    });
+  }
+  // スマホの写真はそのままだと重いので、長い辺を MAX_SIDE までに縮める
+  async function shrink(file) {
+    let bmp; try { bmp = await createImageBitmap(file); } catch(e) { return null; }
+    const w = bmp.width, h = bmp.height, k = Math.min(1, MAX_SIDE / Math.max(w, h));
+    if (file.type === 'image/gif' || (k === 1 && file.size < 1.5e6)) { bmp.close(); return {blob:file, w, h}; }
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * k); c.height = Math.round(h * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); bmp.close();
+    const blob = await new Promise(r => c.toBlob(r, file.type === 'image/png' ? 'image/png' : 'image/jpeg', .88));
+    return blob ? {blob, w:c.width, h:c.height} : {blob:file, w, h};
+  }
+  function addPic(id, rec) { PICS.set(id, {id, url:URL.createObjectURL(rec.blob), w:rec.w, h:rec.h}); }
+
+  // 文を「文字」と「画像」に分ける。消した画像の［画像N］は表示しない
+  function parse(text) {
+    const out = []; let last = 0;
+    for (const m of text.matchAll(TOKEN)) {
+      if (m.index > last) out.push(text.slice(last, m.index));
+      const p = PICS.get(+m[1]); if (p) out.push(p);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  }
+  // el の中身を文字と画像で描く。画像だけの文なら el に solo を付ける
+  function paint(el, text, max = Infinity) {
+    const parts = parse(text);
+    const solo = parts.filter(p => typeof p !== 'string').length === 1 && parts.every(p => typeof p !== 'string' || !p.trim());
+    el.classList.toggle('solo', solo);
+    el.textContent = '';
+    let n = 0;
+    for (const p of parts) {
+      if (typeof p === 'string') {
+        if (solo) continue;
+        if (n + p.length > max) { el.append(p.slice(0, max - n) + '…'); return; }
+        el.append(p); n += p.length;
+      } else {
+        if (n >= max) { el.append('…'); return; }
+        const img = new Image(p.w, p.h); img.src = p.url; img.alt = '画像' + p.id;
+        el.append(img); n += 2;
+      }
+    }
+  }
+  const paintSample = () => paint(sample, input.value.trim() || '見本');
+
+  // 入力欄のカーソル位置を覚えておき、画像をそこへ差し込む（null なら末尾）
+  let caret = null;
+  ['input','keyup','click','select'].forEach(ev => input.addEventListener(ev, () => { caret = input.selectionStart; }));
+  function insertPic(id) {
+    const v = input.value, s = '［画像' + id + '］', a = Math.min(caret ?? v.length, v.length);
+    input.value = v.slice(0, a) + s + v.slice(a);
+    caret = a + s.length;
+    paintSample();
+  }
+
+  let picEditing = false;
+  function renderPics() {
+    const g = $('pics'); g.innerHTML = '';
+    g.classList.toggle('editing', picEditing);
+    S.pics.forEach(id => {
+      const p = PICS.get(id); if (!p) return;
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'tile';
+      const img = new Image(p.w, p.h); img.src = p.url; img.alt = '';
+      const x = document.createElement('span'); x.className = 'x'; x.textContent = '×';
+      b.append(img, '画像' + id, x);
+      b.onclick = () => {
+        if (!picEditing) { insertPic(id); return; }
+        S.pics = S.pics.filter(v => v !== id); save();
+        URL.revokeObjectURL(p.url); PICS.delete(id);
+        tx('readwrite', st => st.delete(id));
+        if (!S.pics.length) picEditing = false;
+        renderPics(); renderChips(); syncUI();
+      };
+      g.appendChild(b);
+    });
+    if (!picEditing) {
+      const add = document.createElement('button');
+      add.type = 'button'; add.className = 'tile add';
+      const plus = document.createElement('b'); plus.textContent = '＋';
+      add.append(plus, '画像を追加');
+      add.onclick = () => $('picFile').click();
+      g.appendChild(add);
+    }
+    $('editPics').hidden = !S.pics.length;
+    $('editPics').textContent = picEditing ? '完了' : '編集';
+  }
+  $('editPics').onclick = () => { picEditing = !picEditing; renderPics(); };
+  $('picFile').onchange = async e => {
+    for (const f of e.target.files) {
+      const rec = await shrink(f); if (!rec) continue;
+      const id = ++S.picSeq;
+      addPic(id, rec); S.pics.push(id);
+      await tx('readwrite', st => st.put(rec, id));
+    }
+    e.target.value = ''; save(); renderPics();
+  };
 
   /* ---------- 設定 UI ---------- */
   function segBind(segId, key) {
@@ -68,7 +187,7 @@
     $('stLand').textContent = S.land ? '縦にする' : '横にする';
     $('fg').value = S.fg; $('bg').value = S.bg;
     applyLook(sample);
-    sample.textContent = input.value.trim() || '見本';
+    paintSample();
     $('stMode').textContent = S.mode === 'scroll' ? '全文表示' : '流す';
     $('stFlip').classList.toggle('on', S.flip);
     if (!stage.hidden) render();
@@ -82,8 +201,8 @@
     S.phrases.forEach((p, i) => {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'chip';
-      b.append(p);
-      const x = document.createElement('span'); x.className = 'x'; x.textContent = '×'; b.append(x);
+      const t = document.createElement('span'); paint(t, p);
+      const x = document.createElement('span'); x.className = 'x'; x.textContent = '×'; b.append(t, x);
       b.onclick = () => {
         if (editing) { S.phrases.splice(i,1); save(); renderChips(); }
         else { input.value = p; show(); }
@@ -96,7 +215,8 @@
     $('histSec').hidden = !S.history.length;
     S.history.forEach(p => {
       const b = document.createElement('button');
-      b.type = 'button'; b.className = 'chip'; b.textContent = p.length > 18 ? p.slice(0,18) + '…' : p;
+      b.type = 'button'; b.className = 'chip';
+      const t = document.createElement('span'); paint(t, p, 18); b.append(t);
       b.onclick = () => { input.value = p; show(); };
       h.appendChild(b);
     });
@@ -117,7 +237,7 @@
     board.classList.toggle('flip', S.flip);
     board.classList.toggle('scroll', S.mode === 'scroll');
     const text = input.value.trim() || ' ';
-    txt.textContent = S.mode === 'scroll' ? text.replace(/\s*\n\s*/g, '　') : text;
+    paint(txt, S.mode === 'scroll' ? text.replace(/\s*\n\s*/g, '　') : text);
     if (anim) { anim.cancel(); anim = null; }
     txt.style.transform = '';
     const W = fitbox.clientWidth, H = fitbox.clientHeight;
@@ -136,7 +256,8 @@
       );
     } else {
       txt.style.marginTop = '';
-      let lo = 12, hi = Math.max(16, H * S.size / 100), best = lo;
+      // 画像だけのときは文字の大きさに関係なく、画面いっぱいまで広げる
+      let lo = 12, hi = Math.max(16, txt.classList.contains('solo') ? H : H * S.size / 100), best = lo;
       for (let i = 0; i < 18; i++) {
         const mid = (lo + hi) / 2;
         txt.style.fontSize = mid + 'px';
@@ -175,7 +296,8 @@
   };
   $('stFlip').onclick = () => { S.flip = !S.flip; save(); syncUI(); };
   $('stMode').onclick = () => { S.mode = S.mode === 'scroll' ? 'fit' : 'scroll'; save(); syncUI(); };
-  input.addEventListener('input', () => { sample.textContent = input.value.trim() || '見本'; if (!stage.hidden) render(); });
+  $('clearBtn').onclick = () => { input.value = ''; caret = null; paintSample(); };
+  input.addEventListener('input', () => { paintSample(); if (!stage.hidden) render(); });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); show(); }
   });
@@ -217,7 +339,7 @@
           if (e.results[i].isFinal) finals += t; else interim += t;
         }
         input.value = base + finals + interim;
-        sample.textContent = input.value || '見本';
+        caret = null; paintSample();
         if (!stage.hidden) render();
       };
       rec.onerror = e => {
@@ -233,5 +355,14 @@
   $('micBtn').onclick = toggleMic;
   $('stMic').onclick = toggleMic;
 
-  renderChips(); syncUI();
+  renderChips(); renderPics(); syncUI();
+  // 保存してある画像を読み込んでから、画像入りの表示を描き直す
+  (async () => {
+    for (const id of S.pics) {
+      const rec = await tx('readonly', st => st.get(id));
+      if (rec) addPic(id, rec);
+    }
+    S.pics = S.pics.filter(id => PICS.has(id)); save();
+    renderChips(); renderPics(); syncUI();
+  })();
 })();
